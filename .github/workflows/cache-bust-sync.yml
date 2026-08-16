@@ -1,0 +1,31 @@
+name: Refresh Trace sync client
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase-sync.js'
+      - 'index.html'
+      - '.github/workflows/cache-bust-sync.yml'
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bust browser cache for sync client
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text()
+          import re
+          s = re.sub(r'\./supabase-sync\.js(?:\?v=[^"\']*)?', './supabase-sync.js?v=20260817-2', s)
+          p.write_text(s)
+          PY
+      - name: Commit cache-busted reference
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || (git commit -m 'Refresh Trace account client [skip ci]' && git push)
