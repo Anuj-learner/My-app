@@ -1,4 +1,4 @@
-const TRACE_SUPABASE_URL='https://qzsgjyrtlitawsgepwwc2d.supabase.co';
+const TRACE_SUPABASE_URL='https://qzsgjyrtlitawsgepwwc.supabase.co';
 const TRACE_SUPABASE_KEY='sb_publishable_Ca8qpAae0tHAnecrXmlozQ_X5BsZeI1';
 (function(){
  const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';s.onload=boot;s.onerror=()=>console.error('Trace: Supabase client failed to load');document.head.appendChild(s);
