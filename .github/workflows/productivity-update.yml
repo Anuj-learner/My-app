@@ -1,0 +1,69 @@
+name: Add Trace statistics page
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/productivity-update.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update UI and statistics
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          # Brand/name and log wording
+          s = s.replace('<title>Inner Atlas</title>', '<title>Trace</title>')
+          s = s.replace('<div class="logo">IA</div>Inner Atlas', '<div class="logo">TR</div>Trace')
+          s = s.replace('＋ Log activity', '＋ Trace moment')
+          s = s.replace('Log what happened.', 'Trace what happened.')
+          s = s.replace('Add to the Atlas →', 'Add to Trace →')
+          s = s.replace('Your life, mapped', 'Your life, observed')
+
+          # Remove the heatmap from the main Atlas page and replace it with a statistics button.
+          s = re.sub(r'<div class="card" style="margin-top:14px"><div class="ey">Attention heatmap · 35 days</div><div class="matrix" id="matrix"></div></div>', '<div class="card stats-link" style="margin-top:14px"><div><div class="ey">Patterns, not pressure</div><div class="small">See where your attention has been going.</div></div><button class="btn primary" id="statsBtn">See your statistics →</button></div>', s, count=1)
+
+          # Add statistics page before the journal page.
+          stats_page = '''<section id="statistics" class="page"><div class="top"><div><div class="ey">Your patterns</div><h1>See your statistics.</h1><div class="sub">A quiet view of where your attention went.</div></div><button class="btn" id="backAtlas">← Back</button></div><div class="grid stat-summary"><div class="card"><div class="small">TOTAL TIME</div><div class="big" id="statHours">0h</div></div><div class="card"><div class="small">LOGGED MOMENTS</div><div class="big" id="statLogs">0</div></div><div class="card"><div class="small">MOST ACTIVE HOUR</div><div class="big" id="statPeak">—</div></div></div><div class="card stat-card"><div class="ey">Productivity across 24 hours</div><div class="small">Minutes logged in each hour</div><div class="hours24" id="hours24"></div></div><div class="card stat-card"><div class="ey">Attention heatmap · 35 days</div><div class="small">Your activity across the last five weeks</div><div class="matrix" id="statMatrix"></div></div></section>'''
+          s = s.replace('<section id="journal" class="page">', stats_page + '<section id="journal" class="page">', 1)
+
+          # Add statistics CSS before the mobile media query.
+          css = '''.stats-link{display:flex;justify-content:space-between;align-items:center;gap:14px}.stat-summary{grid-template-columns:1fr 1fr 1fr;margin-top:20px}.stat-card{margin-top:14px}.hours24{display:grid;grid-template-columns:repeat(24,1fr);gap:6px;align-items:end;height:180px;margin-top:18px}.hourbar{min-height:4px;background:#33462b;border-radius:5px 5px 2px 2px;position:relative}.hourbar span{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);font:8px monospace;color:#657083}.hourbar strong{display:none}.stat-card{overflow:hidden}.stats-link .btn{white-space:nowrap}'''
+          s = s.replace('@media(max-width:900px)', css + '@media(max-width:900px)', 1)
+
+          # Make mobile statistics compact and readable.
+          mobile = '''@media(max-width:560px){.stats-link{align-items:flex-start;flex-direction:column}.stats-link .btn{width:100%}.stat-summary{grid-template-columns:1fr 1fr;gap:10px}.stat-summary .card:last-child{grid-column:1/-1}.stat-summary .big{font-size:26px}.stat-card{margin-top:10px}.hours24{gap:3px;height:145px;margin-top:14px}.hourbar span{font-size:7px;bottom:-19px}.stat-card .matrix{gap:2px}}'''
+          s = s.replace('</style>', mobile + '</style>', 1)
+
+          # Replace matrix rendering so the main page no longer depends on it, and render stats instead.
+          old = "matrix.innerHTML=Array.from({length:35},(_,i)=>{let day=new Date();day.setDate(day.getDate()-(34-i));let n=D.logs.filter(x=>new Date(x.d).toDateString()==day.toDateString()).reduce((s,x)=>s+x.m,0);if(day.toDateString()==t&&journalDone())n+=30;return `<i class=\"cell ${n>0?'l'+(n<30?1:n<90?2:n<180?3:4):''}\"></i>`}).join('');renderEntries()}"
+          new = "renderEntries();renderStats()}"
+          s = s.replace(old, new, 1)
+
+          # Insert statistics renderer before renderEntries.
+          renderer = '''function renderStats(){if(!document.getElementById('hours24'))return;let bins=Array(24).fill(0);D.logs.forEach(x=>{let h=new Date(x.d).getHours();bins[h]+=Number(x.m)||0});let max=Math.max(...bins,1),peak=bins.indexOf(Math.max(...bins));document.getElementById('statHours').textContent=(D.logs.reduce((s,x)=>s+x.m,0)/60).toFixed(1)+'h';document.getElementById('statLogs').textContent=D.logs.length;document.getElementById('statPeak').textContent=D.logs.length?String(peak).padStart(2,'0')+':00':'—';document.getElementById('hours24').innerHTML=bins.map((n,h)=>`<i class="hourbar" style="height:${Math.max(4,n/max*145)}px" title="${String(h).padStart(2,'0')}:00 · ${n} min"><span>${h%3==0?String(h).padStart(2,'0'):''}</span></i>`).join('');document.getElementById('statMatrix').innerHTML=Array.from({length:35},(_,i)=>{let day=new Date();day.setDate(day.getDate()-(34-i));let n=D.logs.filter(x=>new Date(x.d).toDateString()==day.toDateString()).reduce((s,x)=>s+x.m,0);if(day.toDateString()==new Date().toDateString()&&journalDone())n+=30;return `<i class="cell ${n>0?'l'+(n<30?1:n<90?2:n<180?3:4):''}"></i>`}).join('')}'''
+          s = s.replace('function renderEntries(){', renderer + 'function renderEntries(){', 1)
+
+          # Wire navigation for the statistics page.
+          nav = "document.getElementById('statsBtn').onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById('statistics').classList.add('active');renderStats()};document.getElementById('backAtlas').onclick=()=>{document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById('atlas').classList.add('active')};"
+          s = s.replace('close.onclick=()=>modal.classList.remove(\'open\');', nav + "close.onclick=()=>modal.classList.remove('open');", 1)
+
+          p.write_text(s, encoding='utf-8')
+      - name: Commit changes and remove one-shot workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git rm .github/workflows/productivity-update.yml
+          git commit -m "Rename app and add productivity statistics"
+          git push
